@@ -16,33 +16,36 @@ void WaitForInp();
 
 void InpReady(int signum);
 
+int WaitForChildExec();
+
+void FinishReceived(int signum);
+
 pid_t inp;
 pid_t upd;
 int   ready;
+int counter;
 
 int main(int argc, char *argv[]) {
 
     int              time;
     int              status;
-    struct sigaction usr_action1;
-    sigset_t         block_mask1;
-    struct sigaction usr_action2;
-    sigset_t         block_mask2;
+    struct sigaction usr_action;
+    sigset_t         block_mask;
     int              parentId;
 
     // Establish the signal handler.
-    sigfillset(&block_mask1);
-    usr_action1.sa_handler = timeoutHandler;
-    usr_action1.sa_mask    = block_mask1;
-    usr_action1.sa_flags   = 0;
-    sigaction(SIGALRM, &usr_action1, NULL);
+    sigfillset(&block_mask);
+    usr_action.sa_handler = timeoutHandler;
+    usr_action.sa_mask    = block_mask;
+    usr_action.sa_flags   = 0;
+    sigaction(SIGALRM, &usr_action, NULL);
 
     // Establish the signal handler.
-    sigfillset(&block_mask2);
-    usr_action2.sa_handler = InpReady;
-    usr_action2.sa_mask    = block_mask2;
-    usr_action2.sa_flags   = 0;
-    sigaction(SIGUSR1, &usr_action2, NULL);
+    usr_action.sa_handler = InpReady;
+    sigaction(SIGUSR1, &usr_action, NULL);
+
+    usr_action.sa_handler = FinishReceived;
+    sigaction(SIGUSR2, &usr_action, NULL);
 
     parentId = getpid();
 
@@ -121,12 +124,41 @@ int main(int argc, char *argv[]) {
             // WaitForChildExec();
 
             //Activate program timer.
-            //alarm(time);
+            alarm(time);
+
+            while(counter < 2){
+                sleep(1);
+            }
+
+//            WaitForChildExec();
+//            WaitForChildExec();
+
+
+
 
             //TODO add check
-            pause();
+            /*  int status;
+              int waitResult;
+              waitResult = waitpid(inp, &status, WUNTRACED);
+              if (waitResult < 0) {
+                  perror("Error: wait failed.\n");
+              }
+
+              waitResult = waitpid(upd, &status, WUNTRACED);
+              if (waitResult < 0) {
+                  perror("Error: wait failed.\n");
+              }*/
+
+            //WaitForChildExec();
         }
     }
+
+  //  WaitForChildExec();
+    //WaitForChildExec();
+
+    //TODO add check
+    unlink("data.txt");
+    //sleep(1);
 }
 
 void CreateFile() {
@@ -157,7 +189,7 @@ void CreateFile() {
 
 void timeoutHandler(int signum) {
 
-    printf("Program ended.\n");
+    alarm(0);
 
     int killResult;
 
@@ -171,6 +203,8 @@ void timeoutHandler(int signum) {
         exit(1);
     }
 
+   // WaitForChildExec();
+
     //Send signal to ex2_upd.
     killResult = kill(upd, SIGINT);
 
@@ -180,6 +214,14 @@ void timeoutHandler(int signum) {
         perror("Error: signal failed.\n");
         exit(1);
     }
+
+  //  WaitForChildExec();
+}
+
+void FinishReceived(int signum){
+
+    alarm(0);
+    counter++;
 }
 
 void WaitForInp() {

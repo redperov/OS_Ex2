@@ -10,7 +10,9 @@
 #define MAX_NUM 5
 #define BOARD_SIZE 4
 
-void signalHandler(int sigNum);
+void SIGUSR1Handler(int sigNum);
+
+void SIGINTHandler(int signum);
 
 int readNumber();
 
@@ -20,6 +22,12 @@ void printBorder();
 
 int OpenFileToRead();
 
+void WriteMessage(char *message);
+
+void SendFinished();
+
+int stop;
+
 int main() {
 
     struct sigaction usr_action;
@@ -28,30 +36,36 @@ int main() {
     //Open file to write data into
     //TODO close file.
     int file = OpenFileToRead();
+    int closeResult;
 
     //TODO make validation checks
     sigfillset(&block_mask);
-    usr_action.sa_handler = signalHandler;
+    usr_action.sa_handler = SIGUSR1Handler;
     usr_action.sa_mask    = block_mask;
     usr_action.sa_flags   = 0;
     //TODO make validation checks
     sigaction(SIGUSR1, &usr_action, NULL);
 
+    usr_action.sa_handler = SIGINTHandler;
+    sigaction(SIGINT, &usr_action, NULL);
 
-    while (1) {
+    stop = 0;
 
+    while (!stop) {
+        continue;
     }
 
-    //TODO close file when process is over
-    /* //Close file.
-   closeResult = close(file);
+    //Close file.
+    closeResult = close(file);
 
     //Check if file was closed.
-    if(closeResult < 0){
+    if (closeResult < 0) {
 
         perror("Error: failed to close file.\n");
         exit(1);
-    }*/
+    }
+
+    SendFinished();
 
 }
 
@@ -72,16 +86,26 @@ int OpenFileToRead() {
     return file;
 }
 
-void signalHandler(int sigNum) {
+void SIGUSR1Handler(int sigNum) {
 
     int board[BOARD_SIZE][BOARD_SIZE];
     int closeResult;
+    int foundZero = 0;
+    int found2048 = 0;
 
     //Fill the board.
     for (int i = 0; i < BOARD_SIZE; i++) {
         for (int j = 0; j < BOARD_SIZE; j++) {
 
             board[i][j] = readNumber();
+
+            if (board[i][j] == 2048) {
+
+                found2048 = 1;
+            } else if (board[i][j] == 0) {
+
+                foundZero = 1;
+            }
         }
     }
 
@@ -96,8 +120,55 @@ void signalHandler(int sigNum) {
         printBorder();
     }
 
-    printf("\n");
+    WriteMessage("\n");
+
+    if (found2048) {
+
+        WriteMessage("Congratulations!\n");
+        //TODO handle exit
+        stop = 1;
+
+    } else if (!foundZero) {
+
+        WriteMessage("Game Over!\n");
+        stop = 1;
+    }
 }
+
+void SIGINTHandler(int signum){
+
+    WriteMessage("BYE BYE\n");
+
+    stop = 1;
+}
+
+void SendFinished(){
+
+    int killResult;
+    pid_t  parent = getppid();
+
+    killResult = kill(parent, SIGUSR2);
+
+    if(killResult < 0){
+
+        perror("Error: kill failed.\n");
+        exit(1);
+    }
+}
+
+void WriteMessage(char *message) {
+
+    int writeResult;
+
+    writeResult = write(1, message, strlen(message));
+
+    if (writeResult < 0) {
+
+        perror("Error: write failed.\n");
+        exit(1);
+    }
+}
+
 
 int readNumber() {
 
@@ -106,6 +177,7 @@ int readNumber() {
     int  endOfNumber        = 0;
     int  retNumber;
     char temp;
+    int  writeResult;
     char rawNumber[MAX_NUM] = {0};
 
     while (counter < MAX_NUM && !endOfNumber) {
@@ -117,19 +189,6 @@ int readNumber() {
 
             perror("Error: failed to read.\n");
             exit(1);
-        }
-
-        if(temp == 'l'){
-
-            printf("Game Over!");
-            //TODO handle exit like requested.
-            exit(0);
-        }
-        else if(temp == 'w'){
-
-            printf("Congratulations!");
-            //TODO handle exit like requested.
-            exit(0);
         }
 
         //Check if reached end of number.

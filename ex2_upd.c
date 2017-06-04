@@ -20,6 +20,8 @@ void SendUSR1();
 
 void TimerHandler(int sigNum);
 
+void SIGINTHandler(int signum);
+
 void ShiftLeft(int *gameBoard);
 
 void ShiftRight(int *gameBoard);
@@ -40,9 +42,12 @@ void PrintGameMessage(int choice);
 
 int CheckBoard();
 
+void SendFinished();
+
 int   board[BOARD_SIZE][BOARD_SIZE];
 pid_t pid;
 int   x;
+int stop;
 
 
 int main(int argc, char *argv[]) {
@@ -54,11 +59,14 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
+    int file;
+    int closeResult;
+
     //Variable declarations.
     pid = atoi(argv[1]);
 
     //Open file to read data from.
-    OpenFileToWrite();
+    file = OpenFileToWrite();
 
     //Initialize the game.
     Initialize(pid);
@@ -72,12 +80,17 @@ int main(int argc, char *argv[]) {
     //TODO make validation checks
     sigaction(SIGALRM, &usr_action, NULL);
 
+    usr_action.sa_handler = SIGINTHandler;
+    sigaction(SIGINT, &usr_action, NULL);
+
     //x=2;
     alarm(x);
 
     char command;
 
-    while (1) {
+    stop = 0;
+
+    while (!stop) {
 
         system("stty cbreak -echo");
         command = getchar();
@@ -92,6 +105,18 @@ int main(int argc, char *argv[]) {
         }
 
     }
+
+    //Close file.
+    closeResult = close(file);
+
+    //Check if file was closed.
+    if (closeResult < 0) {
+
+        perror("Error: failed to close file.\n");
+        exit(1);
+    }
+
+    SendFinished();
 }
 
 void Initialize(pid_t pid) {
@@ -170,10 +195,27 @@ void TimerHandler(int sigNum) {
     //Send signal to process inp.
     SendUSR1();
 
+    int boardStatus = CheckBoard();
+
+    if(boardStatus == 0){
+        alarm(x);
+    }
+    else{
+
+        stop = 1;
+    }
+
 //  sigaction(SIGALRM, &usr_action, NULL);
 
     //Set new timer.
-    alarm(x);
+
+}
+
+void SIGINTHandler(int signum){
+
+    //TODO would it handle the case where both game ends and SIGINT received?
+    alarm(0);
+    stop = 1;
 }
 
 void HandleUserCommand(char command) {
@@ -212,6 +254,20 @@ void HandleUserCommand(char command) {
         default:
             break;
 
+    }
+}
+
+void SendFinished(){
+
+    int killResult;
+    pid_t  parent = getppid();
+
+    killResult = kill(parent, SIGUSR2);
+
+    if(killResult < 0){
+
+        perror("Error: kill failed.\n");
+        exit(1);
     }
 }
 
@@ -259,7 +315,7 @@ void PrintBoardLine() {
 
         for (int j = 0; j < BOARD_SIZE; ++j) {
 
-            char *number[6];
+            char number[6];
             memset(number, 0, 6);
 
             //Convert number to string.
@@ -294,21 +350,25 @@ void DecideGameStatus() {
         PrintBoardLine();
         SendUSR1();
         alarm(x);
-    } else if (boardStatus == 1) {
+
+    }
+   /* else if (boardStatus == 1) {
 
         //Print game won.
         PrintGameMessage(1);
         //TODO handle exit as requested.
-        exit(0);
-    } else {
+        stop = 1;
+    }*/
+    else {
 
         //Print game lost.
-        PrintBoardLine(2);
+        //PrintGameMessage(2);
         //TODO handle exit as requested.
-        exit(0);
+        stop = 1;
     }
 }
 
+/*
 void PrintGameMessage(int choice) {
 
     int  writeResult;
@@ -337,6 +397,7 @@ void PrintGameMessage(int choice) {
     }
 
 }
+*/
 
 int CheckBoard() {
 
