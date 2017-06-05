@@ -10,44 +10,117 @@
 #define MAX_NUM 5
 #define BOARD_SIZE 4
 
+/**
+ * function name: SIGUSR1Handler.
+ * The input: signal number.
+ * The output: void.
+ * The function operation: Handles SIGUSR1.
+*/
 void SIGUSR1Handler(int sigNum);
 
+/**
+ * function name: SIGINTHandler.
+ * The input: signal number.
+ * The output: void.
+ * The function operation: Handles SIGINT.
+*/
 void SIGINTHandler(int signum);
 
-int readNumber();
+/**
+ * function name: ReadNumber.
+ * The input: void.
+ * The output: read number.
+ * The function operation: reads numbers from file.
+*/
+int ReadNumber();
 
-void printNumber(int num);
+/**
+ * function name: PrintNumber.
+ * The input: number.
+ * The output: void.
+ * The function operation: prints number.
+*/
+void PrintNumber(int num);
 
-void printBorder();
+/**
+ * function name: PrintBorder.
+ * The input: void.
+ * The output: void.
+ * The function operation: prints border.
+*/
+void PrintBorder();
 
+/**
+ * function name: OpenFileToRead.
+ * The input: void
+ * The output: file descriptor.
+ * The function operation: opens file to read.
+*/
 int OpenFileToRead();
 
+/**
+ * function name: WriteMessage.
+ * The input: message.
+ * The output: void.
+ * The function operation: writes message.
+*/
 void WriteMessage(char *message);
 
+/**
+ * function name: SendFinished.
+ * The input: void.
+ * The output: void.
+ * The function operation: sends finish notification.
+*/
 void SendFinished();
 
+//Variable declarations.
 int stop;
 
 int main() {
 
+    //Variable declarations.
     struct sigaction usr_action;
     sigset_t         block_mask;
+    int              closeResult;
+    int              resultValue;
 
     //Open file to write data into
-    //TODO close file.
     int file = OpenFileToRead();
-    int closeResult;
 
-    //TODO make validation checks
-    sigfillset(&block_mask);
+    //Set block mask.
+    resultValue = sigfillset(&block_mask);
+
+    //Check if sigfillset worked.
+    if (resultValue < 0) {
+
+        perror("Error: sigfillset failed.\n");
+        exit(1);
+    }
+
     usr_action.sa_handler = SIGUSR1Handler;
     usr_action.sa_mask    = block_mask;
     usr_action.sa_flags   = 0;
-    //TODO make validation checks
-    sigaction(SIGUSR1, &usr_action, NULL);
+
+    //Set sigaction for SIGUSR1
+    resultValue = sigaction(SIGUSR1, &usr_action, NULL);
+
+    //Check if sigaction worked.
+    if (resultValue < 0) {
+
+        perror("Error: sigaction failed.\n");
+    }
 
     usr_action.sa_handler = SIGINTHandler;
+
+    //Set sigaction for SIGINT
     sigaction(SIGINT, &usr_action, NULL);
+
+    //Check if sigaction worked.
+    if (resultValue < 0) {
+
+        perror("Error: sigaction failed.\n");
+    }
 
     stop = 0;
 
@@ -65,11 +138,15 @@ int main() {
         exit(1);
     }
 
+    //Send finish notification.
     SendFinished();
 
 }
 
 int OpenFileToRead() {
+
+    //Variable declarations.
+    int dupResult;
 
     //Open file to read data from.
     int file = open("data.txt", O_RDONLY);
@@ -81,75 +158,93 @@ int OpenFileToRead() {
     }
 
     //Redirect to STDIN.
-    dup2(file, 0);
+    dupResult = dup2(file, 0);
+
+    //Check if dup2 worked.
+    if(dupResult < 0){
+
+        perror("Error: dup2 failed.\n");
+        exit(1);
+    }
 
     return file;
 }
 
 void SIGUSR1Handler(int sigNum) {
 
-    int board[BOARD_SIZE][BOARD_SIZE];
-    int closeResult;
-    int foundZero = 0;
-    int found2048 = 0;
+    if (!stop) {
 
-    //Fill the board.
-    for (int i = 0; i < BOARD_SIZE; i++) {
-        for (int j = 0; j < BOARD_SIZE; j++) {
+        //Variable declarations.
+        int board[BOARD_SIZE][BOARD_SIZE];
+        int foundZero = 0;
+        int found2048 = 0;
+        int i;
+        int j;
 
-            board[i][j] = readNumber();
+        //Fill the board.
+        for ( i = 0; i < BOARD_SIZE; i++) {
+            for ( j = 0; j < BOARD_SIZE; j++) {
 
-            if (board[i][j] == 2048) {
+                board[i][j] = ReadNumber();
 
-                found2048 = 1;
-            } else if (board[i][j] == 0) {
+                if (board[i][j] == 2048) {
 
-                foundZero = 1;
+                    found2048 = 1;
+                } else if (board[i][j] == 0) {
+
+                    foundZero = 1;
+                }
             }
         }
-    }
 
-    //Print the board.
-    for (int i = 0; i < BOARD_SIZE; i++) {
+        i = 0;
+        j = 0;
 
-        for (int j = 0; j < BOARD_SIZE; j++) {
+        //Print the board.
+        for (i = 0; i < BOARD_SIZE; i++) {
 
-            printNumber(board[i][j]);
+            for (j = 0; j < BOARD_SIZE; j++) {
+
+                PrintNumber(board[i][j]);
+            }
+
+            PrintBorder();
         }
 
-        printBorder();
+        WriteMessage("\n");
+
+        //Check if game is over.
+        if (found2048) {
+
+            WriteMessage("Congratulations!\n");
+            stop = 1;
+
+        } else if (!foundZero) {
+
+            WriteMessage("Game Over!\n");
+            stop = 1;
+        }
     }
 
-    WriteMessage("\n");
-
-    if (found2048) {
-
-        WriteMessage("Congratulations!\n");
-        //TODO handle exit
-        stop = 1;
-
-    } else if (!foundZero) {
-
-        WriteMessage("Game Over!\n");
-        stop = 1;
-    }
 }
 
-void SIGINTHandler(int signum){
+void SIGINTHandler(int signum) {
 
     WriteMessage("BYE BYE\n");
 
     stop = 1;
 }
 
-void SendFinished(){
+void SendFinished() {
 
-    int killResult;
-    pid_t  parent = getppid();
+    int   killResult;
+    pid_t parent = getppid();
 
+    //Notify parent.
     killResult = kill(parent, SIGUSR2);
 
-    if(killResult < 0){
+    //Check if signal was sent.
+    if (killResult < 0) {
 
         perror("Error: kill failed.\n");
         exit(1);
@@ -170,8 +265,9 @@ void WriteMessage(char *message) {
 }
 
 
-int readNumber() {
+int ReadNumber() {
 
+    //Variable declarations.
     int  readResult         = 0;
     int  counter            = 0;
     int  endOfNumber        = 0;
@@ -210,7 +306,7 @@ int readNumber() {
     return retNumber;
 }
 
-void printNumber(int num) {
+void PrintNumber(int num) {
 
     char printResult[7];
     int  writeResult;
@@ -233,7 +329,7 @@ void printNumber(int num) {
 
 }
 
-void printBorder() {
+void PrintBorder() {
 
     int writeResult;
 

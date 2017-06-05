@@ -8,44 +8,107 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-void timeoutHandler(int signum);
+/**
+ * function name: TimeoutHandler.
+ * The input: signal number.
+ * The output: void.
+ * The function operation: Handles alarm.
+*/
+void TimeoutHandler(int signum);
 
+/**
+ * function name: timeoutHandler.
+ * The input: signal number.
+ * The output: void.
+ * The function operation: Handles alarm.
+*/
 void CreateFile();
 
+/**
+ * function name: WaitForInp.
+ * The input: void.
+ * The output: void.
+ * The function operation: Waits for second process.
+*/
 void WaitForInp();
 
+/**
+ * function name: InpReady.
+ * The input: signal number.
+ * The output: void.
+ * The function operation: Notifies that it's ready.
+*/
 void InpReady(int signum);
 
-int WaitForChildExec();
-
+/**
+ * function name: FinishReceived.
+ * The input: signal number.
+ * The output: void.
+ * The function operation: Handles finish.
+*/
 void FinishReceived(int signum);
 
+//Variable declarations.
 pid_t inp;
 pid_t upd;
 int   ready;
-int counter;
+int   counter;
 
 int main(int argc, char *argv[]) {
 
+    //Variable declarations.
     int              time;
     int              status;
     struct sigaction usr_action;
     sigset_t         block_mask;
     int              parentId;
+    int              resultValue;
 
-    // Establish the signal handler.
-    sigfillset(&block_mask);
-    usr_action.sa_handler = timeoutHandler;
+    //Set block mask.
+    resultValue = sigfillset(&block_mask);
+
+    //Check if sigfillset worked.
+    if (resultValue < 0) {
+
+        perror("Error: sigfillset failed.\n");
+        exit(1);
+    }
+
+    usr_action.sa_handler = TimeoutHandler;
     usr_action.sa_mask    = block_mask;
     usr_action.sa_flags   = 0;
-    sigaction(SIGALRM, &usr_action, NULL);
+
+    //Set sigaction for SIGALRM.
+    resultValue = sigaction(SIGALRM, &usr_action, NULL);
+
+    //Check if sigaction worked.
+    if (resultValue < 0) {
+
+        perror("Error: sigaction failed.\n");
+    }
 
     // Establish the signal handler.
     usr_action.sa_handler = InpReady;
-    sigaction(SIGUSR1, &usr_action, NULL);
+
+    //Set sigaction for SIGUSR1.
+    resultValue = sigaction(SIGUSR1, &usr_action, NULL);
+
+    //Check if sigaction worked.
+    if (resultValue < 0) {
+
+        perror("Error: sigaction failed.\n");
+    }
 
     usr_action.sa_handler = FinishReceived;
-    sigaction(SIGUSR2, &usr_action, NULL);
+
+    //Set sigaction for SIGUSR2.
+    resultValue = sigaction(SIGUSR2, &usr_action, NULL);
+
+    //Check if sigaction worked.
+    if (resultValue < 0) {
+
+        perror("Error: sigaction failed.\n");
+    }
 
     parentId = getpid();
 
@@ -65,6 +128,7 @@ int main(int argc, char *argv[]) {
 
         perror("Error: fork failed.\n");
         exit(1);
+
     } else if (inp == 0) {
 
         char *args[] = {"./ex2_inp.out", 0};
@@ -118,47 +182,27 @@ int main(int argc, char *argv[]) {
                 exit(1);
             }
 
-            perror("upd success\n");
         } else {
 
-            // WaitForChildExec();
 
             //Activate program timer.
             alarm(time);
 
-            while(counter < 2){
+            while (counter < 2) {
                 sleep(1);
             }
-
-//            WaitForChildExec();
-//            WaitForChildExec();
-
-
-
-
-            //TODO add check
-            /*  int status;
-              int waitResult;
-              waitResult = waitpid(inp, &status, WUNTRACED);
-              if (waitResult < 0) {
-                  perror("Error: wait failed.\n");
-              }
-
-              waitResult = waitpid(upd, &status, WUNTRACED);
-              if (waitResult < 0) {
-                  perror("Error: wait failed.\n");
-              }*/
-
-            //WaitForChildExec();
         }
     }
 
-  //  WaitForChildExec();
-    //WaitForChildExec();
+    //Unlink file.
+    resultValue = unlink("data.txt");
 
-    //TODO add check
-    unlink("data.txt");
-    //sleep(1);
+    //Check if unlink worked.
+    if (resultValue < 0) {
+
+        perror("Error: unlink failed.\n");
+        exit(1);
+    }
 }
 
 void CreateFile() {
@@ -187,7 +231,7 @@ void CreateFile() {
     }
 }
 
-void timeoutHandler(int signum) {
+void TimeoutHandler(int signum) {
 
     alarm(0);
 
@@ -203,8 +247,6 @@ void timeoutHandler(int signum) {
         exit(1);
     }
 
-   // WaitForChildExec();
-
     //Send signal to ex2_upd.
     killResult = kill(upd, SIGINT);
 
@@ -214,11 +256,9 @@ void timeoutHandler(int signum) {
         perror("Error: signal failed.\n");
         exit(1);
     }
-
-  //  WaitForChildExec();
 }
 
-void FinishReceived(int signum){
+void FinishReceived(int signum) {
 
     alarm(0);
     counter++;
@@ -234,31 +274,4 @@ void WaitForInp() {
 void InpReady(int signum) {
 
     ready = 1;
-}
-
-int WaitForChildExec() {
-
-    //Variable declarations.
-    int waitVal;
-    int status;
-
-    waitVal = wait(&status);
-
-    if (waitVal == -1) {
-
-        perror("Error: wait failed.\n");
-        exit(1);
-    }
-
-    //Check status.
-    if (WIFEXITED(status)) {
-
-        //Check if execution succeeded.
-        if (WEXITSTATUS(status) == 1) {
-
-            return 0;
-        }
-
-        return 1;
-    }
 }

@@ -1,5 +1,4 @@
 
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -8,46 +7,142 @@
 #include <fcntl.h>
 #include <string.h>
 
-#define BOARD_SIZE 4
+#define BOARD_SIZE 16
+#define MOVE_SIZE 4
 
+/**
+ * function name: Initialize.
+ * The input: process id.
+ * The output: void.
+ * The function operation: Initializes the game.
+*/
 void Initialize(pid_t pid);
 
+/**
+ * function name: SetRandomCell.
+ * The input: void.
+ * The output: void.
+ * The function operation: Sets a random cell value.
+*/
 void SetRandomCell();
 
+/**
+ * function name: PrintBoardLine.
+ * The input: void.
+ * The output: void.
+ * The function operation: Writes the board into a file.
+*/
 void PrintBoardLine();
 
+/**
+ * function name: SendUSR1.
+ * The input: process id.
+ * The output: void.
+ * The function operation: Sends a SIGUSR1.
+*/
 void SendUSR1();
 
+/**
+ * function name: TimerHandler.
+ * The input: signal number.
+ * The output: void.
+ * The function operation: Handles alarm signal.
+*/
 void TimerHandler(int sigNum);
 
+/**
+ * function name: SIGINTHandler.
+ * The input: signal number.
+ * The output: void.
+ * The function operation: handles SIGINT signal.
+*/
 void SIGINTHandler(int signum);
 
-void ShiftLeft(int *gameBoard);
+/**
+ * function name: LeftMove.
+ * The input: game board.
+ * The output: void.
+ * The function operation: performs left movement.
+*/
+void LeftMove(int *grid);
 
-void ShiftRight(int *gameBoard);
+/**
+ * function name: RightMove.
+ * The input: game board.
+ * The output: void.
+ * The function operation: performs right movement.
+*/
+void RightMove(int *grid);
 
-void ShiftUp(int *gameBoard);
+/**
+ * function name: UpMove.
+ * The input: game board.
+ * The output: void.
+ * The function operation: performs up movement.
+*/
+void UpMove(int *grid);
 
-void ShiftDown(int *gameBoard);
+/**
+ * function name: DownMove.
+ * The input: game board.
+ * The output: void.
+ * The function operation: performs down movement.
+*/
+void DownMove(int *grid);
 
+/**
+ * function name: RandomX.
+ * The input: void.
+ * The output: void.
+ * The function operation: Sets random x value.
+*/
 void RandomX();
 
+/**
+ * function name: OpenFileToWrite.
+ * The input: void.
+ * The output: void.
+ * The function operation: Opens file for writing.
+*/
 int OpenFileToWrite();
 
+/**
+ * function name: HandleUserCommand.
+ * The input: command.
+ * The output: void.
+ * The function operation: Handles user input.
+*/
 void HandleUserCommand(char command);
 
+/**
+ * function name: DecideGameStatus.
+ * The input: void.
+ * The output: void.
+ * The function operation: Decides game status.
+*/
 void DecideGameStatus();
 
-void PrintGameMessage(int choice);
-
+/**
+ * function name: CheckBoard.
+ * The input: void.
+ * The output: is finished.
+ * The function operation: Checks if the board is finished.
+*/
 int CheckBoard();
 
+/**
+ * function name: SendFinished.
+ * The input: void.
+ * The output: void.
+ * The function operation: Sends finished notification.
+*/
 void SendFinished();
 
-int   board[BOARD_SIZE][BOARD_SIZE];
+//Variable declarations.
+int   board[BOARD_SIZE];
 pid_t pid;
 int   x;
-int stop;
+int   stop;
 
 
 int main(int argc, char *argv[]) {
@@ -59,10 +154,15 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
-    int file;
-    int closeResult;
-
     //Variable declarations.
+    int              file;
+    int              closeResult;
+    int              resultValue;
+    char             command;
+    struct sigaction usr_action;
+    sigset_t         block_mask;
+
+    //Set process id.
     pid = atoi(argv[1]);
 
     //Open file to read data from.
@@ -71,32 +171,53 @@ int main(int argc, char *argv[]) {
     //Initialize the game.
     Initialize(pid);
 
-    struct sigaction usr_action;
-    sigset_t         block_mask;
-    sigfillset(&block_mask);
+    //Set block mask.
+    resultValue = sigfillset(&block_mask);
+
+    //Check if sigfillset worked.
+    if (resultValue < 0) {
+
+        perror("Error: sigfillset failed.\n");
+        exit(1);
+    }
     usr_action.sa_handler = TimerHandler;
     usr_action.sa_mask    = block_mask;
     usr_action.sa_flags   = 0;
-    //TODO make validation checks
-    sigaction(SIGALRM, &usr_action, NULL);
+
+    //Set sigaction for SIGALRM.
+    resultValue = sigaction(SIGALRM, &usr_action, NULL);
+
+    //Check if sigaction worked.
+    if (resultValue < 0) {
+
+        perror("Error: sigaction failed.\n");
+    }
 
     usr_action.sa_handler = SIGINTHandler;
-    sigaction(SIGINT, &usr_action, NULL);
 
-    //x=2;
+    //Set sigaction for SIGINT.
+    resultValue = sigaction(SIGINT, &usr_action, NULL);
+
+    //Check if sigaction worked.
+    if (resultValue < 0) {
+
+        perror("Error: sigaction failed.\n");
+    }
+
+    //Set alarm.
     alarm(x);
-
-    char command;
 
     stop = 0;
 
     while (!stop) {
 
+        //Read user input.
         system("stty cbreak -echo");
         command = getchar();
         system("stty cooked echo");
 
         if (command != -1) {
+
             //Disable alarm
             alarm(0);
 
@@ -116,23 +237,21 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
+    //Send finished notification.
     SendFinished();
 }
 
 void Initialize(pid_t pid) {
 
-    int randCellX1 = 0;
-    int randCellY1 = 0;
-    int randCellX2 = 0;
-    int randCellY2 = 0;
+    //Variable declarations.
+    int randCell1 = 0;
+    int randCell2 = 0;
+    int i;
 
     //Initialize board with zeros.
-    for (int i = 0; i < BOARD_SIZE; ++i) {
+    for (i = 0; i < BOARD_SIZE; ++i) {
 
-        for (int j = 0; j < BOARD_SIZE; ++j) {
-
-            board[i][j] = 0;
-        }
+        board[i] = 0;
     }
 
     srand(time(NULL));
@@ -141,19 +260,17 @@ void Initialize(pid_t pid) {
     x = (rand() % 5) + 1;
 
     //Generate random cell positions.
-    randCellX1 = rand() % BOARD_SIZE;
-    randCellY1 = rand() % BOARD_SIZE;
-    randCellX2 = rand() % BOARD_SIZE;
+    randCell1 = rand() % BOARD_SIZE;
 
     do {
 
-        randCellY2 = rand() % BOARD_SIZE;
-    } while (randCellY2 == randCellY1);
+        randCell2 = rand() % BOARD_SIZE;
+    } while (randCell2 == randCell1);
 
 
     //Set random cells.
-    board[randCellX1][randCellY1] = 2;
-    board[randCellX2][randCellY2] = 2;
+    board[randCell1] = 2;
+    board[randCell2] = 2;
 
     //Print board in line format.
     PrintBoardLine();
@@ -164,6 +281,9 @@ void Initialize(pid_t pid) {
 }
 
 int OpenFileToWrite() {
+
+    int dupResult;
+
     //Open file to read data from.
     int file = open("data.txt", O_WRONLY);
 
@@ -174,7 +294,14 @@ int OpenFileToWrite() {
     }
 
     //Redirect to STDOUT.
-    dup2(file, 1);
+    dupResult = dup2(file, 1);
+
+    //Check if dup2 worked.
+    if(dupResult < 0){
+
+        perror("Error: dup2 failed.\n");
+        exit(1);
+    }
 
     return file;
 }
@@ -197,23 +324,19 @@ void TimerHandler(int sigNum) {
 
     int boardStatus = CheckBoard();
 
-    if(boardStatus == 0){
+    //Check if game can continue.
+    if (boardStatus == 0) {
+
         alarm(x);
-    }
-    else{
+    } else {
 
         stop = 1;
     }
 
-//  sigaction(SIGALRM, &usr_action, NULL);
-
-    //Set new timer.
-
 }
 
-void SIGINTHandler(int signum){
+void SIGINTHandler(int signum) {
 
-    //TODO would it handle the case where both game ends and SIGINT received?
     alarm(0);
     stop = 1;
 }
@@ -224,25 +347,25 @@ void HandleUserCommand(char command) {
 
         case 'A':
             //Move left.
-            ShiftLeft(board);
+            LeftMove(board);
             DecideGameStatus();
             break;
 
         case 'D':
             //Move right.
-            ShiftRight(board);
+            RightMove(board);
             DecideGameStatus();
             break;
 
         case 'W':
             //Move up.
-            ShiftUp(board);
+            UpMove(board);
             DecideGameStatus();
             break;
 
         case 'X':
             //Move down.
-            ShiftDown(board);
+            DownMove(board);
             DecideGameStatus();
             break;
 
@@ -257,14 +380,17 @@ void HandleUserCommand(char command) {
     }
 }
 
-void SendFinished(){
+void SendFinished() {
 
-    int killResult;
-    pid_t  parent = getppid();
+    //Variable declarations.
+    int   killResult;
+    pid_t parent = getppid();
 
+    //Send signal to parent.
     killResult = kill(parent, SIGUSR2);
 
-    if(killResult < 0){
+    //Check if signal was sent.
+    if (killResult < 0) {
 
         perror("Error: kill failed.\n");
         exit(1);
@@ -273,69 +399,73 @@ void SendFinished(){
 
 void SetRandomCell() {
 
+    //Variable declarations.
     int isDone = 0;
-    int randCellX;
-    int randCellY;
+    int randCell;
 
     srand(time(NULL));
 
     while (!isDone) {
 
-        randCellX = rand() % 4;
-        randCellY = rand() % 4;
+        //Generate random value.
+        randCell = rand() % BOARD_SIZE;
 
-        if (board[randCellX][randCellY] == 0) {
+        if (board[randCell] == 0) {
 
-            board[randCellX][randCellY] = 2;
+            board[randCell] = 2;
             isDone = 1;
         }
     }
-
 }
 
 void SendUSR1() {
 
     int killResult;
 
-    killResult = kill(pid, SIGUSR1);
+    if (!stop) {
 
-    //Check if signal was sent.
-    if (killResult < 0) {
+        killResult = kill(pid, SIGUSR1);
 
-        perror("Error: signal failed.\n");
-        exit(1);
+        //Check if signal was sent.
+        if (killResult < 0) {
+
+            perror("Error: signal failed.\n");
+            exit(1);
+        }
     }
+
 }
 
 void PrintBoardLine() {
 
+    //Variable declarations.
     int writeResult;
+    int i;
 
-    for (int i = 0; i < BOARD_SIZE; ++i) {
+    for (i = 0; i < BOARD_SIZE; ++i) {
 
-        for (int j = 0; j < BOARD_SIZE; ++j) {
+        char number[6];
+        memset(number, 0, 6);
 
-            char number[6];
-            memset(number, 0, 6);
+        //Convert number to string.
+        if (i == BOARD_SIZE - 1) {
 
-            //Convert number to string.
-            if (i == BOARD_SIZE - 1 && j == BOARD_SIZE - 1) {
+            sprintf(number, "%d\n", board[i]);
+        } else {
 
-                sprintf(number, "%d\n", board[i][j]);
-            } else {
-
-                sprintf(number, "%d,", board[i][j]);
-            }
-
-            writeResult = write(1, number, strlen(number));
-
-            //Check if wrote.
-            if (writeResult < 0) {
-
-                perror("Error: write failed.\n");
-                exit(1);
-            }
+            sprintf(number, "%d,", board[i]);
         }
+
+        //Write value to file.
+        writeResult = write(1, number, strlen(number));
+
+        //Check if wrote.
+        if (writeResult < 0) {
+
+            perror("Error: write failed.\n");
+            exit(1);
+        }
+
     }
 }
 
@@ -351,75 +481,33 @@ void DecideGameStatus() {
         SendUSR1();
         alarm(x);
 
-    }
-   /* else if (boardStatus == 1) {
-
-        //Print game won.
-        PrintGameMessage(1);
-        //TODO handle exit as requested.
-        stop = 1;
-    }*/
-    else {
-
-        //Print game lost.
-        //PrintGameMessage(2);
-        //TODO handle exit as requested.
-        stop = 1;
-    }
-}
-
-/*
-void PrintGameMessage(int choice) {
-
-    int  writeResult;
-    char message[1];
-
-    if (choice == 2) {
-
-        //Set message to game lost.
-        message[0] = 'l';
     } else {
 
-        //Set message to game won.
-        message[0] = 'w';
+        stop = 1;
     }
-
-    //Write message.
-    writeResult = write(1, message, 1);
-
-    perror("Wrote message.\n");
-
-    //Check if wrote.
-    if (writeResult < 0) {
-
-        perror("Error: write failed.\n");
-        exit(1);
-    }
-
 }
-*/
 
 int CheckBoard() {
 
     int foundZero = 0;
+    int i;
 
-    for (int i = 0; i < BOARD_SIZE; ++i) {
-        for (int j = 0; j < BOARD_SIZE; ++j) {
+    for (i = 0; i < BOARD_SIZE; ++i) {
 
-            if (board[i][j] == 2048) {
+        if (board[i] == 2048) {
 
-                //Game won.
-                return 1;
-            }
-
-            if(board[i][j] == 0){
-
-                foundZero = 1;
-            }
+            //Game won.
+            return 1;
         }
+
+        if (board[i] == 0) {
+
+            foundZero = 1;
+        }
+
     }
 
-    if(foundZero){
+    if (foundZero) {
 
         //Game is still on.
         return 0;
@@ -434,113 +522,175 @@ void RandomX() {
 
     srand(time(NULL));
 
+    //Generate random value.
     x = (rand() % 5) + 1;
 }
 
-void ShiftLeft(int *gameBoard) {
+void UpMove(int *grid) {
 
-    int      ptr, checker;
-    for (int i = 0; i < BOARD_SIZE; i++) {
-        ptr     = 0;
-        checker = 0;
-        for (int j = 0; j < BOARD_SIZE; j++) {
-            if (gameBoard[i * BOARD_SIZE + j] != 0) {
-                if (ptr != j) {
-                    gameBoard[i * BOARD_SIZE + ptr] = gameBoard[i * BOARD_SIZE +
-                                                                j];
-                    gameBoard[i * BOARD_SIZE + j]   = 0;
+    //Variable declarations.
+    int position;
+    int validate;
+    int rows;
+    int columns;
+
+    for (rows = 0; rows < MOVE_SIZE; rows++) {
+
+        position = 0;
+        validate = 0;
+
+        for (columns = 0; columns < MOVE_SIZE; columns++) {
+
+            if (grid[columns * MOVE_SIZE + rows] != 0) {
+
+                if (position != columns) {
+
+                    grid[rows + position * MOVE_SIZE] = grid[rows +
+                                                             MOVE_SIZE *
+                                                             columns];
+                    grid[rows + MOVE_SIZE * columns]  = 0;
                 }
-                if ((ptr > checker) &&
-                    (gameBoard[i * BOARD_SIZE + ptr] ==
-                     gameBoard[i * BOARD_SIZE + ptr - 1])) {
-                    gameBoard[i * BOARD_SIZE + ptr - 1] *= 2;
-                    gameBoard[i * BOARD_SIZE + ptr] = 0;
-                    checker = ptr;
-                    --ptr;
+
+                if ((position > validate) &&
+                    (grid[rows + position * MOVE_SIZE] ==
+                     grid[rows + (position - 1) * MOVE_SIZE])) {
+
+                    grid[rows + (position - 1) * MOVE_SIZE] *= 2;
+                    grid[rows + position * MOVE_SIZE] = 0;
+
+                    validate = position;
+                    --position;
                 }
-                ++ptr;
+
+                ++position;
             }
         }
     }
 }
 
-void ShiftRight(int *gameBoard) {
+void DownMove(int *grid) {
 
-    int      ptr, checker;
-    for (int i = 0; i < BOARD_SIZE; i++) {
-        ptr     = BOARD_SIZE - 1;
-        checker = BOARD_SIZE - 1;
-        for (int j = BOARD_SIZE - 1; j >= 0; j--) {
-            if (gameBoard[i * BOARD_SIZE + j] != 0) {
-                if (ptr != j) {
-                    gameBoard[i * BOARD_SIZE + ptr] = gameBoard[i * BOARD_SIZE +
-                                                                j];
-                    gameBoard[i * BOARD_SIZE + j]   = 0;
+    //Variable declarations.
+    int rows;
+    int columns;
+    int position;
+    int validate;
+
+    for (rows = 0; rows < MOVE_SIZE; rows++) {
+
+        position = MOVE_SIZE - 1;
+        validate = MOVE_SIZE - 1;
+
+        for (columns = MOVE_SIZE - 1; columns >= 0; columns--) {
+
+            if (grid[rows + columns * MOVE_SIZE] != 0) {
+
+                if (position != columns) {
+
+                    grid[rows + MOVE_SIZE * position] = grid[rows +
+                                                             MOVE_SIZE *
+                                                             columns];
+                    grid[rows + MOVE_SIZE * columns]  = 0;
                 }
-                if ((ptr < checker) &&
-                    (gameBoard[i * BOARD_SIZE + ptr] ==
-                     gameBoard[i * BOARD_SIZE + ptr + 1])) {
-                    gameBoard[i * BOARD_SIZE + ptr + 1] *= 2;
-                    gameBoard[i * BOARD_SIZE + ptr] = 0;
-                    checker = ptr;
-                    ++ptr;
+
+                if ((position < validate) &&
+                    (grid[rows + position * MOVE_SIZE] ==
+                     grid[rows + (position + 1) * MOVE_SIZE])) {
+
+                    grid[rows + (position + 1) * MOVE_SIZE] *= 2;
+                    grid[rows + position * MOVE_SIZE] = 0;
+
+                    validate = position;
+                    ++position;
                 }
-                --ptr;
+
+                --position;
             }
         }
     }
 }
 
-void ShiftDown(int *gameBoard) {
-    //go over the integers array and move down and merge cells.
-    int i, j, ptr, checker;
-    for (i = 0; i < BOARD_SIZE; i++) {
-        ptr     = BOARD_SIZE - 1;
-        checker = BOARD_SIZE - 1;
-        for (j  = BOARD_SIZE - 1; j >= 0; j--) {
-            if (gameBoard[i + j * BOARD_SIZE] != 0) {
-                if (ptr != j) {
-                    gameBoard[i + BOARD_SIZE * ptr] = gameBoard[i +
-                                                                BOARD_SIZE * j];
-                    gameBoard[i + BOARD_SIZE * j]   = 0;
+void LeftMove(int *grid) {
+
+    //Variable declarations.
+    int position;
+    int validate;
+    int rows;
+    int columns;
+
+    for (rows = 0; rows < MOVE_SIZE; rows++) {
+
+        position = 0;
+        validate = 0;
+
+        for (columns = 0; columns < MOVE_SIZE; columns++) {
+
+            if (grid[rows * MOVE_SIZE + columns] != 0) {
+
+                if (position != columns) {
+
+                    grid[rows * MOVE_SIZE + position] = grid[rows * MOVE_SIZE +
+                                                             columns];
+                    grid[rows * MOVE_SIZE + columns]  = 0;
                 }
-                if ((ptr < checker) &&
-                    (gameBoard[i + ptr * BOARD_SIZE] ==
-                     gameBoard[i + (ptr + 1) * BOARD_SIZE])) {
-                    gameBoard[i + (ptr + 1) * BOARD_SIZE] *= 2;
-                    gameBoard[i + ptr * BOARD_SIZE] = 0;
-                    checker = ptr;
-                    ++ptr;
+
+                if ((position > validate) &&
+                    (grid[rows * MOVE_SIZE + position] ==
+                     grid[rows * MOVE_SIZE + position - 1])) {
+
+                    grid[rows * MOVE_SIZE + position - 1] *= 2;
+                    grid[rows * MOVE_SIZE + position] = 0;
+
+                    validate = position;
+                    --position;
                 }
-                --ptr;
+
+                ++position;
             }
         }
     }
 }
 
-void ShiftUp(int *gameBoard) {
+void RightMove(int *grid) {
 
-    int      ptr, checker;
-    for (int i = 0; i < BOARD_SIZE; i++) {
-        ptr     = 0;
-        checker = 0;
-        for (int j = 0; j < BOARD_SIZE; j++) {
-            if (gameBoard[j * BOARD_SIZE + i] != 0) {
-                if (ptr != j) {
-                    gameBoard[i + ptr * BOARD_SIZE] = gameBoard[i +
-                                                                BOARD_SIZE * j];
-                    gameBoard[i + BOARD_SIZE * j]   = 0;
+    //Variable declarations.
+    int position;
+    int validate;
+    int rows;
+    int columns;
+
+    for (rows = 0; rows < MOVE_SIZE; rows++) {
+
+        position = MOVE_SIZE - 1;
+        validate = MOVE_SIZE - 1;
+
+        for (columns = MOVE_SIZE - 1; columns >= 0; columns--) {
+
+            if (grid[rows * MOVE_SIZE + columns] != 0) {
+
+                if (position != columns) {
+
+                    grid[rows * MOVE_SIZE + position] = grid[rows * MOVE_SIZE +
+                                                             columns];
+                    grid[rows * MOVE_SIZE + columns]  = 0;
                 }
-                if ((ptr > checker) &&
-                    (gameBoard[i + ptr * BOARD_SIZE] ==
-                     gameBoard[i + (ptr - 1) * BOARD_SIZE])) {
-                    gameBoard[i + (ptr - 1) * BOARD_SIZE] *= 2;
-                    gameBoard[i + ptr * BOARD_SIZE] = 0;
-                    checker = ptr;
-                    --ptr;
+
+                if ((position < validate) &&
+                    (grid[rows * MOVE_SIZE + position] ==
+                     grid[rows * MOVE_SIZE + position + 1])) {
+
+                    grid[rows * MOVE_SIZE + position + 1] *= 2;
+                    grid[rows * MOVE_SIZE + position] = 0;
+
+                    validate = position;
+                    ++position;
                 }
-                ++ptr;
+
+                --position;
             }
         }
     }
 }
+
+
+
